@@ -52,7 +52,7 @@ def main():
     parser.add_argument(
         "--camera-port",
         type=int,
-        default=0,
+        default=5,
         help="Camera device port",
     )
     parser.add_argument(

@@ -52,15 +52,16 @@ class LeRobotRobot(RobotClient):
             from lerobot.robots.so_follower.config_so_follower import SOFollowerRobotConfig
             from lerobot.cameras.opencv.configuration_opencv import OpenCVCameraConfig
 
-            # Build cameras config
+            # Build cameras config (matching lerobot-record format)
             cameras = {}
             for name, cam_cfg in self.config.cameras.items():
                 if isinstance(cam_cfg, dict):
                     cameras[name] = OpenCVCameraConfig(
-                        cam_cfg.get("port", 0),
-                        fps=cam_cfg.get("fps", 30),
+                        index_or_path=cam_cfg.get("index_or_path", 0),
                         width=cam_cfg.get("width", 640),
                         height=cam_cfg.get("height", 480),
+                        fps=cam_cfg.get("fps", 30),
+                        fourcc=cam_cfg.get("fourcc"),
                     )
                 else:
                     cameras[name] = cam_cfg
@@ -113,23 +114,15 @@ class LeRobotRobot(RobotClient):
         # Get raw observation from LeRobot robot
         obs_dict = self._robot.get_observation()
 
-        # Extract image (if cameras are configured)
+        # Extract image (LeRobot returns camera key directly, e.g. "front")
         image = None
-        for key in ["observation.images.front", "observation.images.cam"]:
+        for key in ["front", "observation.images.front", "cam"]:
             if key in obs_dict:
                 image = obs_dict[key]
                 break
 
         if image is None:
             image = np.zeros((480, 640, 3), dtype=np.uint8)
-
-        # Convert to numpy if needed
-        if hasattr(image, "numpy"):
-            image = image.numpy()
-        if isinstance(image, np.ndarray) and image.ndim == 4:
-            image = image[0]
-        if isinstance(image, np.ndarray) and image.ndim == 3 and image.shape[0] == 3:
-            image = np.transpose(image, (1, 2, 0))
 
         # Extract state (joint positions)
         state = []
@@ -183,6 +176,14 @@ class SO101Robot(LeRobotRobot):
         config = LeRobotRobotConfig(
             robot_type="so_follower",
             port=port,
-            cameras={"front": {"port": camera_port}},
+            cameras={
+                "front": {
+                    "index_or_path": camera_port,
+                    "width": 640,
+                    "height": 480,
+                    "fps": 30,
+                    "fourcc": "MJPG",
+                }
+            },
         )
         super().__init__(config)
