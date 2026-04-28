@@ -37,32 +37,45 @@ lerobot_remote/
 
 ## 快速开始
 
-### 1. 安装依赖
+### 1. 部署云端 Server（4090 服务器）
 
 ```bash
-pip install websockets msgpack numpy torch opencv-python pyyaml
+# SSH 到 4090 服务器
+ssh 4090
+
+# 进入项目目录并拉取最新代码
+cd ~/lerobot_client_serve
+git pull
+
+# 启动 ACT 推理服务器
+nohup /home/datago/miniconda3/envs/lerobot/bin/python scripts/run_server.py \
+  --config configs/config.example.yaml > server.log 2>&1 &
+
+# 确认服务器运行中
+ps aux | grep run_server | grep -v grep
+tail -10 ~/lerobot_client_serve/server.log
 ```
 
-### 2. 配置
-
-复制配置示例文件并修改：
+### 2. 启动边缘端 Client（本地 Yoga）
 
 ```bash
-cp configs/config.example.yaml configs/config.yaml
-# 编辑 config.yaml
+# 进入项目目录
+cd ~/work/lerobot_remote
+git pull
+
+# 启动边缘端机械臂控制
+/home/donquixote/miniconda3/envs/lerobot/bin/python scripts/run_client.py \
+  --server-url ws://100.89.143.11:8000 \
+  --robot-type so101 \
+  --robot-port /dev/robot_follower \
+  --camera-port 0
 ```
 
-### 3. 启动云端 Server（4090）
+### 3. 观察与停止
 
-```bash
-python scripts/run_server.py --config configs/config.yaml
-```
-
-### 4. 启动边缘端 Client
-
-```bash
-python scripts/run_client.py --config configs/config.yaml
-```
+- 客户端会先移动到安全起始位置，然后连接到云端开始推理
+- 按 `Ctrl+C` 停止客户端
+- 服务器会持续运行
 
 ## 使用示例
 
