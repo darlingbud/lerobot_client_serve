@@ -49,6 +49,11 @@ def main():
         help="Use simulated robot (for testing without hardware)",
     )
     parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Get observation and inference only, do NOT execute actions",
+    )
+    parser.add_argument(
         "--api-key",
         type=str,
         default=None,
@@ -125,15 +130,32 @@ def main():
         sys.exit(0)
 
     logging.info("Connected to cloud policy server!")
-    logging.info("Ready to receive commands")
+
+    if args.dry_run:
+        logging.info("DRY RUN MODE: Will NOT execute actions, only print them")
+        print("\n=== DRY RUN: Getting observation, running inference, printing action ===\n")
 
     # Run control loop
     print("\nControl loop started. Press Ctrl+C to stop")
     try:
         while True:
             try:
-                action = client.infer_and_execute()
-                logging.debug(f"Executed action: {action.action}")
+                # Get observation
+                obs = robot.get_observation()
+                logging.debug(f"Got observation: state={obs.state}")
+
+                # Send to cloud and get action
+                action = client.infer(obs)
+
+                if args.dry_run:
+                    # Only print, don't execute
+                    print(f"[DRY RUN] Action received: {action.action}")
+                    print(f"[DRY RUN] Server timing: {action.server_timing}")
+                else:
+                    # Execute action
+                    robot.execute(action.action)
+                    logging.debug(f"Executed action: {action.action}")
+
             except Exception as e:
                 logging.error(f"Error: {e}")
     except KeyboardInterrupt:
