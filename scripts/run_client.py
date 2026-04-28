@@ -124,6 +124,22 @@ def main():
 
     logging.info("Robot connected!")
 
+    # Move to safe starting position (for grasping task)
+    import numpy as np
+    SAFE_POSITIONS = np.array([
+        1.126972201352359,   # shoulder_pan
+        -97.32999582811848,  # shoulder_lift (in degrees, LeRobot uses degrees internally)
+        100.0,               # elbow_flex
+        71.68443496801706,   # wrist_flex
+        0.024420024420024333, # wrist_roll
+        0.9946949602122015,   # gripper
+    ])
+    logging.info(f"Moving to safe starting position: {SAFE_POSITIONS}")
+    robot.execute(SAFE_POSITIONS)
+    import time
+    time.sleep(3)  # Wait for robot to reach position
+    logging.info("Ready at safe position")
+
     # Create remote client
     if not args.server_url:
         logging.error("--server-url required (or set in config)")
