@@ -149,8 +149,8 @@ class Serialization:
 # =============================================================================
 
 DEFAULT_SERVER_PORT = 8000
-HEALTH_CHECK_PATH = "/healthz"
-PROTOCOL_VERSION = "1.0"
+HealthCheckPath = "/healthz"
+ProtocolVersion = "1.0"
 
 # Error codes
 class ErrorCode:
