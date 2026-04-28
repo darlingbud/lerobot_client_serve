@@ -16,6 +16,15 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+# Add robot_agent to path (from SO-101 skill)
+skill_robot_agent = Path.home() / ".nvm/versions/node/v22.22.2/lib/node_modules/openclaw/skills/so101robot/scripts"
+sys.path.insert(0, str(skill_robot_agent))
+
+# Also add workspace robot_agent if exists
+workspace_robot_agent = Path.home() / ".openclaw/workspace/so_follower_robot/robot_agent"
+if workspace_robot_agent.exists():
+    sys.path.insert(0, str(workspace_robot_agent))
+
 
 def main():
     parser = argparse.ArgumentParser(description="Run Robot Client")

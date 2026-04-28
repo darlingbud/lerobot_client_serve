@@ -7,7 +7,8 @@ import logging
 import time
 from typing import Optional
 
-import websockets.sync.client as ws_client
+import websockets.sync.client
+from websockets.sync.client import connect as ws_connect
 
 from lerobot_remote.protocol import Action, Observation, ServerMetadata, Serialization
 
@@ -62,7 +63,7 @@ class RemoteRobotClient:
         self.api_key = api_key
         self.reconnect_interval = reconnect_interval
 
-        self._ws: Optional[ws_client.ClientConnection] = None
+        self._ws: Optional[websockets.sync.client.ClientConnection] = None
         self._server_metadata: Optional[ServerMetadata] = None
         self._serialization = Serialization()
 
@@ -78,7 +79,7 @@ class RemoteRobotClient:
 
         while True:
             try:
-                self._ws = ws_client.connect(
+                self._ws = ws_connect(
                     self.server_url,
                     compression=None,
                     max_size=None,
