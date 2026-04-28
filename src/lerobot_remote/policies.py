@@ -111,7 +111,7 @@ class LeRobotACTPolicy(PolicyServer):
                     image = np.transpose(image, (2, 0, 1))
                 image = torch.from_numpy(image).float()
 
-            le_obs["observation.images.cam"] = image.unsqueeze(0).to(self.device)
+            le_obs["observation.images.front"] = image.unsqueeze(0).to(self.device)
 
         # Handle state
         if obs.state is not None:
