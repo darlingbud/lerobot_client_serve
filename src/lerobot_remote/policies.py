@@ -1,6 +1,7 @@
 """LeRobot ACT Policy Server.
 
 Concrete implementation of PolicyServer for LeRobot ACT policies.
+Uses official LeRobot preprocessor/postprocessor pipelines for proper normalization.
 """
 
 import logging
@@ -20,6 +21,7 @@ class LeRobotACTPolicy(PolicyServer):
     """LeRobot ACT policy server.
 
     Loads a LeRobot ACT checkpoint and runs inference.
+    Uses LeRobot's preprocessor/postprocessor pipelines for proper normalization.
     """
 
     def __init__(
@@ -36,10 +38,10 @@ class LeRobotACTPolicy(PolicyServer):
         self.checkpoint_path = Path(checkpoint_path)
         self.device = device
         self._policy = None
-        self._action_mean = None
-        self._action_std = None
+        self._preprocessor = None
+        self._postprocessor = None
         self._load_policy()
-        self._load_normalization_stats()
+        self._load_processors()
 
     def _load_policy(self) -> None:
         """Load the LeRobot policy from checkpoint."""
@@ -52,11 +54,6 @@ class LeRobotACTPolicy(PolicyServer):
             logger.error("Install with: pip install -e /path/to/lerobot")
             raise
 
-        # Load config
-        config_path = self.checkpoint_path / "config.json"
-        if not config_path.exists():
-            raise FileNotFoundError(f"Config not found: {config_path}")
-
         # Load policy
         self._policy = ACTPolicy.from_pretrained(self.checkpoint_path)
         self._policy.to(self.device)
@@ -64,48 +61,44 @@ class LeRobotACTPolicy(PolicyServer):
 
         logger.info("LeRobot ACT policy loaded successfully")
 
-    def _load_normalization_stats(self) -> None:
-        """Load action normalization stats for denormalization."""
+    def _load_processors(self) -> None:
+        """Load preprocessor and postprocessor from LeRobot factory."""
         try:
-            from safetensors.numpy import load_file
-        except ImportError:
-            logger.warning("safetensors not available, skipping normalization stats")
-            return
+            from lerobot.policies.factory import make_pre_post_processors
+        except ImportError as e:
+            logger.error(f"LeRobot factory not found: {e}")
+            raise
 
-        stats_path = self.checkpoint_path / "policy_postprocessor_step_0_unnormalizer_processor.safetensors"
-        if not stats_path.exists():
-            logger.warning(f"Normalization stats not found: {stats_path}")
-            return
+        # Create pre/post processors using LeRobot factory
+        # Override device to 'cpu' if CUDA is not available
+        preprocessor_overrides = {"device_processor": {"device": self.device}}
+        postprocessor_overrides = {"device_processor": {"device": self.device}}
 
-        try:
-            stats = load_file(stats_path)
-            self._action_mean = stats["action.mean"]  # shape: (6,)
-            self._action_std = stats["action.std"]    # shape: (6,)
-            logger.info(f"Loaded action stats - mean: {self._action_mean}, std: {self._action_std}")
-        except Exception as e:
-            logger.warning(f"Failed to load normalization stats: {e}")
+        self._preprocessor, self._postprocessor = make_pre_post_processors(
+            policy_cfg=self._policy.config,
+            pretrained_path=str(self.checkpoint_path),
+            preprocessor_overrides=preprocessor_overrides,
+            postprocessor_overrides=postprocessor_overrides,
+        )
+
+        logger.info("Pre/post processors loaded successfully")
 
     def infer(self, obs: Observation) -> Action:
         """Run ACT inference on observation."""
         # Convert observation to LeRobot format
         le_obs = self._to_lerobot_obs(obs)
 
+        # Run preprocessor (normalization, batching, device placement)
+        le_obs = self._preprocessor(le_obs)
+
         with torch.inference_mode():
             action = self._policy.select_action(le_obs)
 
-        # Convert to numpy
-        if hasattr(action, "cpu"):
-            action = action.cpu().numpy()
-        elif isinstance(action, torch.Tensor):
-            action = action.numpy()
+        # Run postprocessor (unnormalization) - PolicyAction is torch.Tensor
+        action = self._postprocessor(action)
 
-        # Ensure it's 1D
-        action = action.flatten()  # shape: (6,)
-
-        # Denormalize action (MEAN_STD normalization)
-        if self._action_mean is not None and self._action_std is not None:
-            action = action * self._action_std + self._action_mean
-            logger.debug(f"Denormalized action: {action}")
+        # Convert to numpy array
+        action = action.cpu().numpy().flatten()  # shape: (6,)
 
         return Action(action=action)
 
@@ -125,8 +118,6 @@ class LeRobotACTPolicy(PolicyServer):
         1. build_dataset_frame() - structure as dataset features
         2. prepare_observation_for_inference() - convert to tensor, normalize images to [0,1], CHW format
         """
-        import torch
-
         le_obs = {}
 
         # Handle image - same as prepare_observation_for_inference
@@ -144,7 +135,7 @@ class LeRobotACTPolicy(PolicyServer):
                 if image.ndim == 3 and image.shape[2] in [1, 3, 4]:
                     image = image.permute(2, 0, 1)  # HWC -> CHW
 
-            le_obs["observation.images.front"] = image.unsqueeze(0).to(self.device)
+            le_obs["observation.images.front"] = image
 
         # Handle state - same format as build_dataset_frame output
         if obs.state is not None:
@@ -153,7 +144,7 @@ class LeRobotACTPolicy(PolicyServer):
                 state = np.array(state, dtype=np.float32)
             elif isinstance(state, torch.Tensor):
                 state = state.cpu().numpy()
-            le_obs["observation.state"] = torch.from_numpy(state).float().unsqueeze(0).to(self.device)
+            le_obs["observation.state"] = torch.from_numpy(state).float()
 
         # Add task and robot_type (required by ACT policy)
         le_obs["task"] = ""
