@@ -87,12 +87,10 @@ class LeRobotACTPolicy(PolicyServer):
 
     def infer(self, obs: Observation) -> Action:
         """Run ACT inference on observation."""
-        import time
-
         # Convert observation to LeRobot format
         le_obs = self._to_lerobot_obs(obs)
 
-        with torch.no_grad():
+        with torch.inference_mode():
             action = self._policy.select_action(le_obs)
 
         # Convert to numpy
@@ -121,12 +119,18 @@ class LeRobotACTPolicy(PolicyServer):
         )
 
     def _to_lerobot_obs(self, obs: Observation) -> Dict[str, Any]:
-        """Convert generic observation to LeRobot format."""
+        """Convert generic observation to LeRobot format.
+
+        Mirrors the lerobot_record flow:
+        1. build_dataset_frame() - structure as dataset features
+        2. prepare_observation_for_inference() - convert to tensor, normalize images to [0,1], CHW format
+        """
         import torch
 
         le_obs = {}
 
-        # Handle image
+        # Handle image - same as prepare_observation_for_inference
+        # Image format from robot: (H, W, C) uint8 RGB
         if obs.image is not None:
             image = obs.image
 
@@ -134,22 +138,26 @@ class LeRobotACTPolicy(PolicyServer):
             if isinstance(image, dict) and "data" in image:
                 image = image["data"]
 
-            # Convert to tensor (HWC -> CHW)
+            # Convert to tensor, normalize to [0, 1], then permute to (C, H, W)
             if isinstance(image, np.ndarray):
+                image = torch.from_numpy(image).float() / 255.0  # normalize to [0,1]
                 if image.ndim == 3 and image.shape[2] in [1, 3, 4]:
-                    image = np.transpose(image, (2, 0, 1))
-                image = torch.from_numpy(image).float()
+                    image = image.permute(2, 0, 1)  # HWC -> CHW
 
             le_obs["observation.images.front"] = image.unsqueeze(0).to(self.device)
 
-        # Handle state
+        # Handle state - same format as build_dataset_frame output
         if obs.state is not None:
             state = obs.state
             if isinstance(state, list):
-                state = torch.tensor(state, dtype=torch.float32)
-            elif isinstance(state, np.ndarray):
-                state = torch.from_numpy(state).float()
-            le_obs["observation.state"] = state.unsqueeze(0).to(self.device)
+                state = np.array(state, dtype=np.float32)
+            elif isinstance(state, torch.Tensor):
+                state = state.cpu().numpy()
+            le_obs["observation.state"] = torch.from_numpy(state).float().unsqueeze(0).to(self.device)
+
+        # Add task and robot_type (required by ACT policy)
+        le_obs["task"] = ""
+        le_obs["robot_type"] = ""
 
         return le_obs
 
