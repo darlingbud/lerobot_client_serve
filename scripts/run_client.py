@@ -56,6 +56,11 @@ def main():
         help="Camera device port",
     )
     parser.add_argument(
+        "--display",
+        action="store_true",
+        help="Display camera feed using OpenCV window",
+    )
+    parser.add_argument(
         "--simulate",
         action="store_true",
         help="Use simulated robot (for testing without hardware)",
@@ -187,6 +192,13 @@ def main():
                     # Execute action
                     robot.execute(action.action)
                     logging.debug(f"Executed action: {action.action}")
+
+                # Display camera feed if enabled
+                if args.display:
+                    import cv2
+                    if obs.image is not None:
+                        cv2.imshow("Robot Camera", obs.image)
+                        cv2.waitKey(1)
 
             except Exception as e:
                 logging.error(f"Error: {e}")
