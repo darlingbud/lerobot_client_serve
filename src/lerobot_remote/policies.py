@@ -36,7 +36,10 @@ class LeRobotACTPolicy(PolicyServer):
         self.checkpoint_path = Path(checkpoint_path)
         self.device = device
         self._policy = None
+        self._action_mean = None
+        self._action_std = None
         self._load_policy()
+        self._load_normalization_stats()
 
     def _load_policy(self) -> None:
         """Load the LeRobot policy from checkpoint."""
@@ -61,6 +64,27 @@ class LeRobotACTPolicy(PolicyServer):
 
         logger.info("LeRobot ACT policy loaded successfully")
 
+    def _load_normalization_stats(self) -> None:
+        """Load action normalization stats for denormalization."""
+        try:
+            from safetensors.numpy import load_file
+        except ImportError:
+            logger.warning("safetensors not available, skipping normalization stats")
+            return
+
+        stats_path = self.checkpoint_path / "policy_postprocessor_step_0_unnormalizer_processor.safetensors"
+        if not stats_path.exists():
+            logger.warning(f"Normalization stats not found: {stats_path}")
+            return
+
+        try:
+            stats = load_file(stats_path)
+            self._action_mean = stats["action.mean"]  # shape: (6,)
+            self._action_std = stats["action.std"]    # shape: (6,)
+            logger.info(f"Loaded action stats - mean: {self._action_mean}, std: {self._action_std}")
+        except Exception as e:
+            logger.warning(f"Failed to load normalization stats: {e}")
+
     def infer(self, obs: Observation) -> Action:
         """Run ACT inference on observation."""
         import time
@@ -78,7 +102,12 @@ class LeRobotACTPolicy(PolicyServer):
             action = action.numpy()
 
         # Ensure it's 1D
-        action = action.flatten()
+        action = action.flatten()  # shape: (6,)
+
+        # Denormalize action (MEAN_STD normalization)
+        if self._action_mean is not None and self._action_std is not None:
+            action = action * self._action_std + self._action_mean
+            logger.debug(f"Denormalized action: {action}")
 
         return Action(action=action)
 
