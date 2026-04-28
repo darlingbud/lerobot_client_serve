@@ -43,9 +43,7 @@ class LeRobotACTPolicy(PolicyServer):
         logger.info(f"Loading LeRobot ACT policy from {self.checkpoint_path}")
 
         try:
-            from lerobot.policies.act.policy import ACTPolicy
-            from lerobot.common.datasets.factory import load_dataset
-            from lerobot.configs import BaseModelConfig
+            from lerobot.policies.act.modeling_act import ACTPolicy
         except ImportError as e:
             logger.error(f"LeRobot not found: {e}")
             logger.error("Install with: pip install -e /path/to/lerobot")
