@@ -86,9 +86,12 @@ class LeRobotRobot(RobotClient):
             cameras = {}
             for name, cam_cfg in self.config.cameras.items():
                 if isinstance(cam_cfg, dict):
-                    cameras[name] = CameraConfig(
-                        type=cam_cfg.get("type", "opencv"),
-                        port=cam_cfg.get("port", 0),
+                    from lerobot.cameras.opencv.configuration_opencv import OpenCVCameraConfig
+                    
+                    # First positional arg is index_or_path (camera port)
+                    port = cam_cfg.get("port", 0)
+                    cameras[name] = OpenCVCameraConfig(
+                        port,  # index_or_path
                         fps=cam_cfg.get("fps", 30),
                         width=cam_cfg.get("width", 640),
                         height=cam_cfg.get("height", 480),
