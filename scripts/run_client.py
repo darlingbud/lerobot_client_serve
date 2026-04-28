@@ -5,7 +5,7 @@ Usage:
     python scripts/run_client.py --config configs/config.yaml
 
 Or with arguments:
-    python scripts/run_client.py --server-url ws://100.89.143.11:8000 --robot-host 192.168.3.164
+    python scripts/run_client.py --server-url ws://100.89.143.11:8000 --robot-type so101 --robot-port /dev/ttyUSB0
 """
 
 import argparse
@@ -16,14 +16,10 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-# Add robot_agent to path (from SO-101 skill)
-skill_robot_agent = Path.home() / ".nvm/versions/node/v22.22.2/lib/node_modules/openclaw/skills/so101robot/scripts"
-sys.path.insert(0, str(skill_robot_agent))
-
-# Also add workspace robot_agent if exists
-workspace_robot_agent = Path.home() / ".openclaw/workspace/so_follower_robot/robot_agent"
-if workspace_robot_agent.exists():
-    sys.path.insert(0, str(workspace_robot_agent))
+# Add lerobot to path
+lerobot_path = Path.home() / "lerobot" / "src"
+if lerobot_path.exists():
+    sys.path.insert(0, str(lerobot_path))
 
 
 def main():
@@ -41,16 +37,23 @@ def main():
         help="WebSocket URL of the policy server",
     )
     parser.add_argument(
-        "--robot-host",
+        "--robot-type",
         type=str,
-        default=None,
-        help="Host of the robot server",
+        default="so101",
+        choices=["so101", "simulate"],
+        help="Type of robot to use",
     )
     parser.add_argument(
         "--robot-port",
+        type=str,
+        default="/dev/ttyUSB0",
+        help="Serial port for robot arm (Linux) or COM port (Windows)",
+    )
+    parser.add_argument(
+        "--camera-port",
         type=int,
-        default=None,
-        help="Port of the robot server",
+        default=0,
+        help="Camera device port",
     )
     parser.add_argument(
         "--simulate",
@@ -85,8 +88,9 @@ def main():
 
         # Override with config values
         args.server_url = args.server_url or config.get("client", {}).get("server_url")
-        args.robot_host = args.robot_host or config.get("robot", {}).get("host", "127.0.0.1")
-        args.robot_port = args.robot_port or config.get("robot", {}).get("port", 8765)
+        args.robot_type = args.robot_type or config.get("robot", {}).get("type", "so101")
+        args.robot_port = args.robot_port or config.get("robot", {}).get("port", "/dev/ttyUSB0")
+        args.camera_port = args.camera_port or config.get("robot", {}).get("camera_port", 0)
 
     # Setup logging
     level = logging.DEBUG if args.verbose else logging.INFO
@@ -101,14 +105,17 @@ def main():
 
         robot = SimulatedRobotClient()
         logging.info("Using simulated robot")
-    else:
-        from lerobot_remote.robot_client import SO101RobotClient
+    elif args.robot_type == "so101":
+        from lerobot_remote.lerobot_robot import SO101Robot
 
-        robot = SO101RobotClient(
-            host=args.robot_host or "127.0.0.1",
-            port=args.robot_port or 8765,
+        robot = SO101Robot(
+            port=args.robot_port,
+            camera_port=args.camera_port,
         )
-        logging.info(f"Connecting to SO-101 robot at {args.robot_host}:{args.robot_port}")
+        logging.info(f"Connecting to SO-101 robot on {args.robot_port} (camera={args.camera_port})")
+    else:
+        logging.error(f"Unknown robot type: {args.robot_type}")
+        sys.exit(1)
 
     # Connect to robot
     if not robot.connect():

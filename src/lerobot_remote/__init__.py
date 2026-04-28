@@ -15,7 +15,8 @@ from lerobot_remote.protocol import (
     Serialization,
 )
 
-from lerobot_remote.robot_client import RobotClient, SO101RobotClient, SimulatedRobotClient
+from lerobot_remote.robot_client import RobotClient, SimulatedRobotClient
+from lerobot_remote.lerobot_robot import LeRobotRobot, LeRobotRobotConfig, SO101Robot
 from lerobot_remote.policy_server import PolicyServer, get_local_ip
 from lerobot_remote.remote_client import RemoteRobotClient
 
@@ -31,8 +32,10 @@ __all__ = [
     "Serialization",
     # Robot clients
     "RobotClient",
-    "SO101RobotClient",
     "SimulatedRobotClient",
+    "LeRobotRobot",
+    "LeRobotRobotConfig",
+    "SO101Robot",
     # Policy servers
     "PolicyServer",
     "get_local_ip",
