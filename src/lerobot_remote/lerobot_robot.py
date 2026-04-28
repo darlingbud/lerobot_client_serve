@@ -70,7 +70,6 @@ class LeRobotRobot(RobotClient):
         """
         self.config = config
         self._robot = None
-        self._cameras = {}
 
     def connect(self) -> bool:
         """Connect to the robot.
@@ -79,13 +78,34 @@ class LeRobotRobot(RobotClient):
             True if connected successfully, False otherwise.
         """
         try:
-            from lerobot.robots import make_robot
+            from lerobot.robots.so_follower.so_follower import SOFollower
+            from lerobot.robots.so_follower.config_so_follower import SOFollowerRobotConfig
+            from lerobot.cameras import CameraConfig
 
-            # Convert config to LeRobot format
-            lr_config = self._to_lerobot_config()
+            # Build cameras config
+            cameras = {}
+            for name, cam_cfg in self.config.cameras.items():
+                if isinstance(cam_cfg, dict):
+                    cameras[name] = CameraConfig(
+                        type=cam_cfg.get("type", "opencv"),
+                        port=cam_cfg.get("port", 0),
+                        fps=cam_cfg.get("fps", 30),
+                        width=cam_cfg.get("width", 640),
+                        height=cam_cfg.get("height", 480),
+                    )
+                else:
+                    cameras[name] = cam_cfg
+
+            # Create LeRobot config
+            lr_config = SOFollowerRobotConfig(
+                id="local",
+                port=self.config.port,
+                cameras=cameras,
+                use_degrees=self.config.use_degrees,
+            )
 
             # Create and connect robot
-            self._robot = make_robot(lr_config)
+            self._robot = SOFollower(lr_config)
             self._robot.connect()
 
             logger.info(f"Connected to {self.config.robot_type} on {self.config.port}")
@@ -93,6 +113,8 @@ class LeRobotRobot(RobotClient):
 
         except Exception as e:
             logger.error(f"Failed to connect to robot: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
     def disconnect(self) -> None:
@@ -134,32 +156,6 @@ class LeRobotRobot(RobotClient):
 
         # Execute
         self._robot.send_action(lr_action)
-
-    def _to_lerobot_config(self):
-        """Convert our config to LeRobot config format."""
-        from lerobot.cameras import CameraConfig
-        from lerobot.robots.so_follower.config_so_follower import SOFollowerRobotConfig
-
-        # Build cameras config
-        cameras = {}
-        for name, cam_cfg in self.config.cameras.items():
-            if isinstance(cam_cfg, dict):
-                cameras[name] = CameraConfig(
-                    type=cam_cfg.get("type", "opencv"),
-                    port=cam_cfg.get("port", 0),
-                    fps=cam_cfg.get("fps", 30),
-                    width=cam_cfg.get("width", 640),
-                    height=cam_cfg.get("height", 480),
-                )
-            else:
-                cameras[name] = cam_cfg
-
-        return SOFollowerRobotConfig(
-            id="local",
-            port=self.config.port,
-            cameras=cameras,
-            use_degrees=self.config.use_degrees,
-        )
 
     def _to_lerobot_action(self, action: np.ndarray) -> Dict[str, float]:
         """Convert numpy action array to LeRobot action dict."""
@@ -213,7 +209,7 @@ class LeRobotRobot(RobotClient):
 class SO101Robot(LeRobotRobot):
     """Convenience class for SO-101 robot.
 
-   预设 SO-101 的默认配置。
+    预设 SO-101 的默认配置。
     """
 
     def __init__(
