@@ -1,0 +1,22 @@
+# LeRobot Remote Configuration
+# Copy this file to config.yaml and fill in your values
+
+server:
+  # 云端服务器监听地址
+  host: "0.0.0.0"
+  port: 8000
+
+  # 模型路径
+  checkpoint: "/path/to/checkpoint/pretrained_model"
+
+  # 设备
+  device: "cuda"
+
+client:
+  # 边缘端连接的服务器地址
+  server_url: "ws://你的云端IP:8000"
+
+robot:
+  # 机器人控制服务地址（边缘端）
+  host: "127.0.0.1"
+  port: 8765

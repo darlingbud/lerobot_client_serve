@@ -1,14 +1,11 @@
 #!/usr/bin/env python3
-"""Run LeRobot Remote Robot Client on edge (local robot machine).
-
-This connects to the cloud policy server and controls the robot.
+"""Run Robot Client on edge.
 
 Usage:
-    # From this machine (edge):
-    python scripts/run_client.py --server-url ws://100.89.143.11:8000 --robot-host 127.0.0.1 --robot-port 8765
+    python scripts/run_client.py --config configs/config.yaml
 
-    # Then control the robot:
-    python scripts/control_robot.py --server-url ws://100.89.143.11:8000
+Or with arguments:
+    python scripts/run_client.py --server-url ws://100.89.143.11:8000 --robot-host 192.168.3.164
 """
 
 import argparse
@@ -18,30 +15,38 @@ from pathlib import Path
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-
-from lerobot_remote.websocket_robot_client import LeRobotRemoteRobot
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run LeRobot Remote Robot Client")
+    parser = argparse.ArgumentParser(description="Run Robot Client")
+    parser.add_argument(
+        "--config",
+        type=str,
+        default=None,
+        help="Path to config file",
+    )
     parser.add_argument(
         "--server-url",
         type=str,
-        default="ws://100.89.143.11:8000",
+        default=None,
         help="WebSocket URL of the policy server",
     )
     parser.add_argument(
         "--robot-host",
         type=str,
-        default="127.0.0.1",
-        help="Host of the local robot server",
+        default=None,
+        help="Host of the robot server",
     )
     parser.add_argument(
         "--robot-port",
         type=int,
-        default=8765,
-        help="Port of the local robot server",
+        default=None,
+        help="Port of the robot server",
+    )
+    parser.add_argument(
+        "--simulate",
+        action="store_true",
+        help="Use simulated robot (for testing without hardware)",
     )
     parser.add_argument(
         "--api-key",
@@ -57,6 +62,18 @@ def main():
 
     args = parser.parse_args()
 
+    # Load config if provided
+    config = {}
+    if args.config:
+        import yaml
+        with open(args.config) as f:
+            config = yaml.safe_load(f)
+
+        # Override with config values
+        args.server_url = args.server_url or config.get("client", {}).get("server_url")
+        args.robot_host = args.robot_host or config.get("robot", {}).get("host", "127.0.0.1")
+        args.robot_port = args.robot_port or config.get("robot", {}).get("port", 8765)
+
     # Setup logging
     level = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(
@@ -64,47 +81,68 @@ def main():
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
-    # Import robot agent
-    try:
-        from robot_agent import RobotAgent
-    except ImportError:
-        logging.error("robot_agent not found. Make sure SO-101 skill is installed.")
-        sys.exit(1)
+    # Create robot client
+    if args.simulate:
+        from lerobot_remote.robot_client import SimulatedRobotClient
+
+        robot = SimulatedRobotClient()
+        logging.info("Using simulated robot")
+    else:
+        from lerobot_remote.robot_client import SO101RobotClient
+
+        robot = SO101RobotClient(
+            host=args.robot_host or "127.0.0.1",
+            port=args.robot_port or 8765,
+        )
+        logging.info(f"Connecting to SO-101 robot at {args.robot_host}:{args.robot_port}")
 
     # Connect to robot
-    logging.info(f"Connecting to robot at {args.robot_host}:{args.robot_port}...")
-    robot = RobotAgent(host=args.robot_host, port=args.robot_port)
     if not robot.connect():
         logging.error("Failed to connect to robot")
         sys.exit(1)
 
     logging.info("Robot connected!")
 
-    # Create remote robot client
-    logging.info(f"Connecting to policy server at {args.server_url}...")
-    remote_robot = LeRobotRemoteRobot(
+    # Create remote client
+    if not args.server_url:
+        logging.error("--server-url required (or set in config)")
+        sys.exit(1)
+
+    from lerobot_remote.remote_client import RemoteRobotClient
+
+    client = RemoteRobotClient(
         robot=robot,
         server_url=args.server_url,
         api_key=args.api_key,
     )
 
-    logging.info("Connected to cloud policy server!")
-    logging.info("Ready to receive commands via infer_and_execute()")
+    # Connect to server
+    try:
+        client.connect()
+    except KeyboardInterrupt:
+        logging.info("Disconnecting...")
+        robot.disconnect()
+        sys.exit(0)
 
-    return remote_robot, robot
+    logging.info("Connected to cloud policy server!")
+    logging.info("Ready to receive commands")
+
+    # Run control loop
+    print("\nControl loop started. Press Ctrl+C to stop")
+    try:
+        while True:
+            try:
+                action = client.infer_and_execute()
+                logging.debug(f"Executed action: {action.action}")
+            except Exception as e:
+                logging.error(f"Error: {e}")
+    except KeyboardInterrupt:
+        print("\nStopping...")
+    finally:
+        client.disconnect()
+        robot.disconnect()
+        logging.info("Disconnected")
 
 
 if __name__ == "__main__":
-    remote_robot, robot = main()
-
-    # Keep running
-    print("\nRobot ready! Use remote_robot.infer_and_execute(obs) to control.")
-    print("Press Ctrl+C to stop")
-
-    import time
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        print("\nStopping...")
-        robot.disconnect()
+    main()

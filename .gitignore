@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+
+# Virtual environments
+venv/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+
+# Config files with sensitive info
+configs/config.yaml
+
+# Logs
+*.log
+
+# Model checkpoints (should be downloaded separately)
+*.pt
+*.safetensors
+checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
