@@ -46,7 +46,7 @@ def main():
     parser.add_argument(
         "--robot-port",
         type=str,
-        default="/dev/ttyUSB0",
+        default="/dev/robot_follower",
         help="Serial port for robot arm (Linux) or COM port (Windows)",
     )
     parser.add_argument(
@@ -58,7 +58,13 @@ def main():
     parser.add_argument(
         "--display",
         action="store_true",
-        help="Display camera feed using OpenCV window",
+        help="Save camera frames to files for viewing",
+    )
+    parser.add_argument(
+        "--display-dir",
+        type=str,
+        default=None,
+        help="Directory to save display frames (default: ~/work/lerobot_remote/frames)",
     )
     parser.add_argument(
         "--simulate",
@@ -193,12 +199,19 @@ def main():
                     robot.execute(action.action)
                     logging.debug(f"Executed action: {action.action}")
 
-                # Display camera feed if enabled
+                # Save camera frame if enabled
                 if args.display:
                     import cv2
+                    import os
+                    display_dir = args.display_dir or os.path.expanduser("~/work/lerobot_remote/frames")
+                    os.makedirs(display_dir, exist_ok=True)
                     if obs.image is not None:
-                        cv2.imshow("Robot Camera", obs.image)
-                        cv2.waitKey(1)
+                        filename = f"frame_{int(time.time()*1000)%100000:05d}.jpg"
+                        filepath = os.path.join(display_dir, filename)
+                        # Convert RGB to BGR for OpenCV
+                        img = cv2.cvtColor(obs.image, cv2.COLOR_RGB2BGR)
+                        cv2.imwrite(filepath, img)
+                        logging.debug(f"Saved frame to {filepath}")
 
             except Exception as e:
                 logging.error(f"Error: {e}")
