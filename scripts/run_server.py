@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/datago/miniconda3/envs/lerobot/bin/python3
 """Run Policy Server on cloud.
 
 Usage:
