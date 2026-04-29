@@ -100,8 +100,8 @@ def main():
         # Override with config values
         args.server_url = args.server_url or config.get("client", {}).get("server_url")
         args.robot_type = args.robot_type or config.get("robot", {}).get("type", "so101")
-        args.robot_port = args.robot_port or config.get("robot", {}).get("port", "/dev/ttyUSB0")
-        args.camera_port = args.camera_port or config.get("robot", {}).get("camera_port", 0)
+        args.robot_port = args.robot_port or config.get("robot", {}).get("port_serial", "/dev/ttyACM0")
+        args.camera_port = args.camera_port or config.get("robot", {}).get("camera_port", 4)
 
     # Setup logging
     level = logging.DEBUG if args.verbose else logging.INFO

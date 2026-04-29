@@ -20,3 +20,7 @@ robot:
   # 机器人控制服务地址（边缘端）
   host: "127.0.0.1"
   port: 8765
+  # 机械臂串口端口
+  port_serial: "/dev/ttyACM0"
+  # 相机设备索引
+  camera_port: 4
