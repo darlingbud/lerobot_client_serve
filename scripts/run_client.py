@@ -97,11 +97,11 @@ def main():
         with open(args.config) as f:
             config = yaml.safe_load(f)
 
-        # Override with config values
-        args.server_url = args.server_url or config.get("client", {}).get("server_url")
-        args.robot_type = args.robot_type or config.get("robot", {}).get("type", "so101")
-        args.robot_port = args.robot_port or config.get("robot", {}).get("port_serial", "/dev/ttyACM0")
-        args.camera_port = args.camera_port or config.get("robot", {}).get("camera_port", 4)
+        # Override with config values (config file wins over defaults)
+        args.server_url = config.get("client", {}).get("server_url") or args.server_url
+        args.robot_type = config.get("robot", {}).get("type") or args.robot_type
+        args.robot_port = config.get("robot", {}).get("port_serial") or args.robot_port
+        args.camera_port = config.get("robot", {}).get("camera_port", args.camera_port)
 
     # Setup logging
     level = logging.DEBUG if args.verbose else logging.INFO
